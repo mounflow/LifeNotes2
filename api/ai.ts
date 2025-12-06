@@ -3,10 +3,10 @@ import { GoogleGenAI } from "@google/genai";
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
-// Initialize Gemini only on the server side
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  console.log("AI Handler invoked", { method: req.method, bodyType: req.body?.type });
+
   // 1. Security: Verify User Token
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ message: 'Unauthorized' });
@@ -15,17 +15,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const token = authHeader.split(' ')[1];
       jwt.verify(token, JWT_SECRET);
   } catch (e) {
+      console.error("Token verification failed", e);
       return res.status(401).json({ message: 'Invalid token' });
+  }
+
+  // 2. Safety Check: Ensure API Key exists
+  if (!process.env.API_KEY) {
+      console.error("Missing Gemini API Key configuration");
+      return res.status(500).json({ message: 'Server configuration error: AI service not available' });
   }
 
   if (req.method !== 'POST') {
       return res.status(405).json({ message: 'Method not allowed' });
   }
 
+  // Initialize AI client per request to ensure environment variables are loaded
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const { type, content, availableTags } = req.body;
 
   try {
-    // 2. Handle Summary Generation
+    // 3. Handle Summary Generation
     if (type === 'summary') {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -34,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ result: response.text || '' });
     } 
     
-    // 3. Handle Tag Suggestion
+    // 4. Handle Tag Suggestion
     else if (type === 'suggestTags') {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
