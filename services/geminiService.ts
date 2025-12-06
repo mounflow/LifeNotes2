@@ -1,39 +1,46 @@
-import { GoogleGenAI } from "@google/genai";
+// This service now communicates with our secure backend (api/ai.ts)
+// The API Key is no longer needed here, ensuring security.
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const API_ENDPOINT = '/api/ai';
+
+const getHeaders = () => {
+    const token = localStorage.getItem('token');
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
+};
 
 export const generateNoteSummary = async (content: string): Promise<string> => {
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `Summarize the following note content into a single concise sentence (max 20 words) in the same language as the input:\n\n${content}`,
+    const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ type: 'summary', content })
     });
-    return response.text || '';
+
+    if (!response.ok) return "";
+    const data = await response.json();
+    return data.result || "";
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("AI Summary Error:", error);
     return "";
   }
 };
 
 export const suggestTags = async (content: string, availableTags: string[]): Promise<string[]> => {
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `Analyze the text below and suggest which tags from the provided list apply. Return ONLY a JSON array of tag names.
-      
-      Available Tags: ${availableTags.join(', ')}
-      
-      Text: ${content}`,
-      config: {
-        responseMimeType: "application/json"
-      }
+    const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ type: 'suggestTags', content, availableTags })
     });
-    
-    const text = response.text;
-    if (!text) return [];
-    return JSON.parse(text) as string[];
+
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.result || [];
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("AI Tags Error:", error);
     return [];
   }
 };
